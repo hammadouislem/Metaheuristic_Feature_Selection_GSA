@@ -1,4 +1,3 @@
-# gsa_feature_selection_multi.py
 import os
 import time
 import json
