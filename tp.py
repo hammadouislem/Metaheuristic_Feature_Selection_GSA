@@ -2,13 +2,27 @@ import os
 import time
 import json
 import random
+import logging
+from collections import Counter
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+from functools import lru_cache
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, StratifiedKFold, train_test_split
 from sklearn.neighbors import KNeighborsClassifier
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('gsa_experiment.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # ----------------------------
 # ========== CONFIG ==========
@@ -77,25 +91,44 @@ def S4(x: np.ndarray) -> np.ndarray:
     """S4 transfer function (vectorized)."""
     return 1.0 / (1.0 + np.exp(-x / 3.0))
 
-def binarize_position(position: np.ndarray) -> np.ndarray:
+def binarize_position(position: np.ndarray, rng: np.random.RandomState = None) -> np.ndarray:
     """Convert continuous position vector -> binary mask using S4."""
+    if rng is None:
+        rng = np.random.RandomState()
     probs = S4(position)
-    rand = np.random.rand(*probs.shape)
+    rand = rng.rand(*probs.shape)
     return (rand < probs).astype(int)
 
 def knn_fitness(mask: np.ndarray, X: np.ndarray, y: np.ndarray, k: int = 3, cv: int = 3) -> float:
     """Evaluate binary mask with KNN and cross-validated accuracy."""
     if mask.sum() == 0:
         return 0.0
+    
+    # Check minimum class size to determine appropriate CV folds
+    class_counts = Counter(y)
+    min_class_size = min(class_counts.values())
+    
+    # Adjust CV folds to not exceed minimum class size
+    effective_cv = min(cv, min_class_size, len(y))
+    
+    if effective_cv < cv:
+        logger.debug(f"Reduced CV folds from {cv} to {effective_cv} (min class size: {min_class_size})")
+    
     Xs = X[:, mask.astype(bool)]
-    clf = KNeighborsClassifier(n_neighbors=k)
-    # Use cross_val_score with n_jobs=1 for stability on some environments
+    clf = KNeighborsClassifier(n_neighbors=min(k, len(y) - 1))
     try:
-        scores = cross_val_score(clf, Xs, y, cv=cv, scoring='accuracy', n_jobs=1)
+        # Use StratifiedKFold for better handling of imbalanced classes
+        if effective_cv >= 2:
+            cv_splitter = StratifiedKFold(n_splits=effective_cv, shuffle=True, random_state=42)
+            scores = cross_val_score(clf, Xs, y, cv=cv_splitter, scoring='accuracy', n_jobs=1)
+        else:
+            # Fallback: if only 1 fold possible, use simple train/test split
+            X_train, X_test, y_train, y_test = train_test_split(Xs, y, test_size=0.3, random_state=42, stratify=y)
+            clf.fit(X_train, y_train)
+            scores = [clf.score(X_test, y_test)]
         return float(scores.mean())
     except Exception as e:
-        # In case the classifier fails (e.g., too few samples), return 0
-        print("Warning: cross_val_score failed:", e)
+        logger.warning(f"cross_val_score failed: {e}")
         return 0.0
 
 # ----------------------------
@@ -112,13 +145,25 @@ def gravitational_search_feature_selection(
     lower: float = LOWER,
     upper: float = UPPER,
     G0_param: float = G0,
-    rng: np.random.RandomState = None
+    rng: np.random.RandomState = None,
+    early_stopping_patience: int = None
 ) -> Dict[str, Any]:
-    """Binary GSA for feature selection returning best mask and history."""
+    """
+    Binary GSA for feature selection returning best mask and history.
+    
+    Args:
+        early_stopping_patience: Stop if no improvement for N iterations (None = disabled)
+    """
     if rng is None:
         rng = np.random.RandomState()
     if dim is None:
         dim = X.shape[1]
+    
+    # Validate inputs
+    if X.shape[0] < cv:
+        raise ValueError(f"Not enough samples ({X.shape[0]}) for {cv}-fold CV")
+    if X.shape[0] == 0 or dim == 0:
+        raise ValueError("Empty dataset or no features")
 
     # initialize continuous positions and velocities
     positions = rng.uniform(lower, upper, size=(n_agents, dim))
@@ -127,18 +172,26 @@ def gravitational_search_feature_selection(
     best_score = -1.0
     best_mask = np.zeros(dim, dtype=int)
     history = []
+    no_improvement_count = 0
+    iteration_best_before = best_score
 
     for t in range(max_iter):
         accuracies = np.zeros(n_agents)
-        masks = np.zeros((n_agents, dim), dtype=int)
 
         # evaluate all agents
         for i in range(n_agents):
-            masks[i] = binarize_position(positions[i])
-            accuracies[i] = knn_fitness(masks[i], X, y, k=k, cv=cv)
+            mask = binarize_position(positions[i], rng=rng)
+            accuracies[i] = knn_fitness(mask, X, y, k=k, cv=cv)
             if accuracies[i] > best_score:
                 best_score = float(accuracies[i])
-                best_mask = masks[i].copy()
+                best_mask = mask.copy()
+        
+        # Check if iteration improved best score
+        if best_score > iteration_best_before:
+            no_improvement_count = 0
+            iteration_best_before = best_score
+        else:
+            no_improvement_count += 1
 
         costs = 1.0 - accuracies  # convert to minimization
         worst = costs.max()
@@ -159,22 +212,29 @@ def gravitational_search_feature_selection(
         # gravitational constant decays
         G = G0_param * (1.0 - (t / float(max_iter)))
 
-        # update positions
+        # Vectorized force calculation (more efficient)
         for i in range(n_agents):
-            force = np.zeros(dim)
-            for j in range(n_agents):
-                if j == i:
-                    continue
-                dist = np.linalg.norm(positions[j] - positions[i]) + 1e-12
-                rand_vec = rng.rand(dim)
-                Fij = rand_vec * G * masses[j] * (positions[j] - positions[i]) / dist
-                force += Fij
+            # Compute distances to all other agents
+            diffs = positions - positions[i]  # (n_agents, dim)
+            dists = np.linalg.norm(diffs, axis=1, keepdims=True) + 1e-12  # (n_agents, 1)
+            dists[i] = np.inf  # exclude self
+            
+            # Compute forces from all agents
+            rand_vecs = rng.rand(n_agents, dim)
+            forces = rand_vecs * G * masses[:, np.newaxis] * diffs / dists
+            force = forces.sum(axis=0)  # sum over all agents
+            
             acc = force / (masses[i] + 1e-12)
             velocities[i] = rng.rand() * velocities[i] + acc
             positions[i] = positions[i] + velocities[i]
             positions[i] = np.clip(positions[i], lower, upper)
 
         history.append(best_score)
+        
+        # Early stopping
+        if early_stopping_patience and no_improvement_count >= early_stopping_patience:
+            logger.info(f"Early stopping at iteration {t+1} (no improvement for {early_stopping_patience} iterations)")
+            break
 
     return {
         "best_mask": best_mask,
@@ -194,9 +254,18 @@ def load_and_preprocess(path: str, meta: dict):
     - Standard scale features
     Returns: X (np.ndarray), y (np.ndarray), feature_names (list)
     """
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Dataset file not found: {path}")
+    
     # read CSV
     header = 0 if meta.get("has_header", True) else None
-    df = pd.read_csv(path, header=header)
+    try:
+        df = pd.read_csv(path, header=header)
+    except Exception as e:
+        raise ValueError(f"Failed to read CSV {path}: {e}")
+    
+    if df.empty:
+        raise ValueError(f"Dataset {path} is empty")
 
     # If target specified by name use it, else by index
     target_name = meta.get("target_column_name")
@@ -219,10 +288,10 @@ def load_and_preprocess(path: str, meta: dict):
         for c in X.columns:
             if pd.api.types.is_numeric_dtype(X[c]):
                 med = X[c].median()
-                X[c].fillna(med, inplace=True)
+                X[c] = X[c].fillna(med)
             else:
                 mode = X[c].mode()
-                X[c].fillna(mode.iloc[0] if len(mode) > 0 else "", inplace=True)
+                X[c] = X[c].fillna(mode.iloc[0] if len(mode) > 0 else "")
 
     # Convert non-numeric features with one-hot encoding (pd.get_dummies)
     # This allows KNN to operate on numeric matrix
@@ -262,13 +331,17 @@ def run_experiments(data_dir: str = ".", meta_map: Dict[str, dict] = datasets_me
     for filename, meta in meta_map.items():
         path = os.path.join(data_dir, filename)
         if not os.path.exists(path):
-            print(f"Warning: {filename} not found at {path}. Skipping.")
+            logger.warning(f"{filename} not found at {path}. Skipping.")
             continue
 
-        print(f"\n=== Running dataset: {filename} ===")
-        X, y, feature_names = load_and_preprocess(path, meta)
+        logger.info(f"\n=== Running dataset: {filename} ===")
+        try:
+            X, y, feature_names = load_and_preprocess(path, meta)
+        except Exception as e:
+            logger.error(f"Failed to load {filename}: {e}. Skipping.")
+            continue
         n_features = X.shape[1]
-        print(f"Features after encoding: {n_features}")
+        logger.info(f"Features after encoding: {n_features}, Samples: {X.shape[0]}")
 
         dataset_results = []
         dataset_dir = os.path.join(OUTPUT_DIR, filename.replace('.','_'))
@@ -295,12 +368,16 @@ def run_experiments(data_dir: str = ".", meta_map: Dict[str, dict] = datasets_me
             selected_count = int(selected_mask.sum())
             selected_indices = [int(i) for i in np.where(selected_mask == 1)[0]]
 
+            # Get actual feature names for selected features
+            selected_feature_names = [feature_names[i] for i in selected_indices]
+            
             row = {
                 "dataset": filename,
                 "run": run_idx,
                 "best_accuracy": float(res["best_score"]),
                 "selected_features_count": selected_count,
                 "selected_feature_indices": json.dumps(selected_indices),
+                "selected_feature_names": json.dumps(selected_feature_names),
                 "time_seconds": elapsed
             }
             dataset_results.append(row)
@@ -328,9 +405,13 @@ def run_experiments(data_dir: str = ".", meta_map: Dict[str, dict] = datasets_me
         })
 
     # global summary
-    df_summary = pd.DataFrame(summary_rows)
-    df_summary.to_csv(os.path.join(OUTPUT_DIR, "global_summary.csv"), index=False)
-    print("\nAll experiments completed. Summary saved to:", OUTPUT_DIR)
+    if summary_rows:
+        df_summary = pd.DataFrame(summary_rows)
+        df_summary.to_csv(os.path.join(OUTPUT_DIR, "global_summary.csv"), index=False)
+        logger.info(f"\nAll experiments completed. Summary saved to: {OUTPUT_DIR}")
+        logger.info(f"\nSummary:\n{df_summary.to_string()}")
+    else:
+        logger.warning("No experiments completed. Check dataset paths and configuration.")
 
 if __name__ == "__main__":
     # default data_dir is current directory; change if your CSVs are elsewhere

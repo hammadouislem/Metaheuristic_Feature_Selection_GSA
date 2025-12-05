@@ -1,0 +1,11 @@
+dataset,run,best_accuracy,selected_features_count,selected_feature_indices,selected_feature_names,time_seconds
+heart_stat.csv,1,0.8296296296296296,7,"[0, 1, 2, 4, 9, 10, 11]","[""age"", ""sex"", ""chest"", ""serum_cholestoral"", ""oldpeak"", ""slope"", ""number_of_major_vessels""]",8.322974681854248
+heart_stat.csv,2,0.825925925925926,8,"[1, 2, 4, 6, 8, 9, 10, 11]","[""sex"", ""chest"", ""serum_cholestoral"", ""resting_electrocardiographic_results"", ""exercise_induced_angina"", ""oldpeak"", ""slope"", ""number_of_major_vessels""]",8.463892459869385
+heart_stat.csv,3,0.8296296296296296,7,"[0, 1, 2, 3, 9, 10, 11]","[""age"", ""sex"", ""chest"", ""resting_blood_pressure"", ""oldpeak"", ""slope"", ""number_of_major_vessels""]",8.612524509429932
+heart_stat.csv,4,0.8185185185185185,4,"[2, 8, 11, 12]","[""chest"", ""exercise_induced_angina"", ""number_of_major_vessels"", ""thal""]",9.965301752090454
+heart_stat.csv,5,0.825925925925926,7,"[1, 2, 3, 4, 8, 10, 11]","[""sex"", ""chest"", ""resting_blood_pressure"", ""serum_cholestoral"", ""exercise_induced_angina"", ""slope"", ""number_of_major_vessels""]",12.245136260986328
+heart_stat.csv,6,0.837037037037037,8,"[0, 1, 2, 3, 4, 9, 11, 12]","[""age"", ""sex"", ""chest"", ""resting_blood_pressure"", ""serum_cholestoral"", ""oldpeak"", ""number_of_major_vessels"", ""thal""]",14.511788368225098
+heart_stat.csv,7,0.837037037037037,8,"[0, 1, 2, 3, 4, 9, 11, 12]","[""age"", ""sex"", ""chest"", ""resting_blood_pressure"", ""serum_cholestoral"", ""oldpeak"", ""number_of_major_vessels"", ""thal""]",13.956801176071167
+heart_stat.csv,8,0.8296296296296296,8,"[2, 4, 6, 8, 9, 10, 11, 12]","[""chest"", ""serum_cholestoral"", ""resting_electrocardiographic_results"", ""exercise_induced_angina"", ""oldpeak"", ""slope"", ""number_of_major_vessels"", ""thal""]",11.551125049591064
+heart_stat.csv,9,0.8296296296296296,6,"[2, 4, 6, 10, 11, 12]","[""chest"", ""serum_cholestoral"", ""resting_electrocardiographic_results"", ""slope"", ""number_of_major_vessels"", ""thal""]",10.159427404403687
+heart_stat.csv,10,0.825925925925926,7,"[1, 2, 7, 8, 9, 10, 11]","[""sex"", ""chest"", ""maximum_heart_rate_achieved"", ""exercise_induced_angina"", ""oldpeak"", ""slope"", ""number_of_major_vessels""]",10.061146020889282

@@ -1,0 +1,50 @@
+2025-12-05 17:42:45,324 - INFO - 
+=== Running dataset: arrhythmia.csv ===
+2025-12-05 17:42:45,788 - INFO - Features after encoding: 279, Samples: 452
+2025-12-05 17:44:22,917 - INFO - 
+=== Running dataset: colon_cancer.csv ===
+2025-12-05 17:44:23,083 - INFO - Features after encoding: 2000, Samples: 62
+2025-12-05 17:45:28,220 - INFO - 
+=== Running dataset: darmatology.csv ===
+2025-12-05 17:45:28,232 - INFO - Features after encoding: 34, Samples: 366
+2025-12-05 17:46:28,268 - INFO - 
+=== Running dataset: heart_stat.csv ===
+2025-12-05 17:46:28,280 - INFO - Features after encoding: 13, Samples: 270
+2025-12-05 17:47:20,296 - INFO - 
+=== Running dataset: vehicule.csv ===
+2025-12-05 17:47:20,311 - INFO - Features after encoding: 18, Samples: 846
+2025-12-05 17:49:32,457 - INFO - 
+All experiments completed. Summary saved to: gsa_results
+2025-12-05 17:49:32,550 - INFO - 
+Summary:
+            dataset  n_features_after_encoding  runs  mean_accuracy  std_accuracy  mean_selected  std_selected  mean_time_s
+0    arrhythmia.csv                        279    10       0.639862      0.008188          136.4      7.720104     9.702283
+1  colon_cancer.csv                       2000    10       0.830952      0.011099          998.2     16.369348     6.505137
+2   darmatology.csv                         34    10       0.967486      0.007449           19.2      1.686548     5.997658
+3    heart_stat.csv                         13    10       0.846667      0.006579            8.6      0.516398     5.190772
+4      vehicule.csv                         18    10       0.739362      0.012147           11.4      1.264911    13.205360
+2025-12-05 17:57:19,609 - INFO - 
+=== Running dataset: arrhythmia.csv ===
+2025-12-05 17:57:19,939 - INFO - Features after encoding: 279, Samples: 452
+2025-12-05 17:58:57,993 - INFO - 
+=== Running dataset: colon_cancer.csv ===
+2025-12-05 17:58:58,139 - INFO - Features after encoding: 2000, Samples: 62
+2025-12-05 18:00:57,029 - INFO - 
+=== Running dataset: darmatology.csv ===
+2025-12-05 18:00:57,041 - INFO - Features after encoding: 34, Samples: 366
+2025-12-05 18:02:36,306 - INFO - 
+=== Running dataset: heart_stat.csv ===
+2025-12-05 18:02:36,320 - INFO - Features after encoding: 13, Samples: 270
+2025-12-05 18:04:24,271 - INFO - 
+=== Running dataset: vehicule.csv ===
+2025-12-05 18:04:24,305 - INFO - Features after encoding: 18, Samples: 846
+2025-12-05 18:07:59,166 - INFO - 
+All experiments completed. Summary saved to: gsa_results
+2025-12-05 18:07:59,183 - INFO - 
+Summary:
+            dataset  n_features_after_encoding  runs  mean_accuracy  std_accuracy  mean_selected  std_selected  mean_time_s
+0    arrhythmia.csv                        279    10       0.632743      0.003129          140.2      6.562520     9.797332
+1  colon_cancer.csv                       2000    10       0.819127      0.010756          994.4     18.880913    11.881003
+2   darmatology.csv                         34    10       0.974590      0.003168           19.4      2.065591     9.918244
+3    heart_stat.csv                         13    10       0.828889      0.005466            7.0      1.247219    10.785012
+4      vehicule.csv                         18    10       0.710757      0.004494           10.2      2.440401    21.474116
